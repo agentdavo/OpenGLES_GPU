@@ -94,7 +94,7 @@ object FpuTypes {
         comp.sign := data.msb
         comp.exponent := 0
         comp.mantissa := 0
-        comp.intValue := data.asSInt
+        comp.intValue := data.asSInt.resize(64) // Sign-extend to 64 bits
         comp.state := FormatState.NORMAL
       }
       comp
@@ -145,16 +145,48 @@ object FpuTypes {
 
     def decode(): Vec[SIMDComponents] = {
       Vec(lanes.map { lane =>
-        val codec = codecs(lane.precision)
-        codec.decode(lane.value.resize(codec.signWidth + codec.expWidth + codec.mantWidth))
+        val decoded = SIMDComponents()
+        switch(lane.precision) {
+          is(Precision.FP8E4M3) { decoded := codecs(Precision.FP8E4M3).decode(lane.value.resize(8)) }
+          is(Precision.FP8E5M2) { decoded := codecs(Precision.FP8E5M2).decode(lane.value.resize(8)) }
+          is(Precision.FP16)    { decoded := codecs(Precision.FP16).decode(lane.value.resize(16)) }
+          is(Precision.BF16)    { decoded := codecs(Precision.BF16).decode(lane.value.resize(16)) }
+          is(Precision.TF32)    { decoded := codecs(Precision.TF32).decode(lane.value.resize(19)) }
+          is(Precision.FP32)    { decoded := codecs(Precision.FP32).decode(lane.value.resize(32)) }
+          is(Precision.FP64)    { decoded := codecs(Precision.FP64).decode(lane.value.resize(64)) }
+          is(Precision.INT8)    { decoded := codecs(Precision.INT8).decode(lane.value.resize(8)) }
+          is(Precision.UINT8)   { decoded := codecs(Precision.UINT8).decode(lane.value.resize(8)) }
+          is(Precision.INT16)   { decoded := codecs(Precision.INT16).decode(lane.value.resize(16)) }
+          is(Precision.UINT16)  { decoded := codecs(Precision.UINT16).decode(lane.value.resize(16)) }
+          is(Precision.INT32)   { decoded := codecs(Precision.INT32).decode(lane.value.resize(32)) }
+          is(Precision.UINT32)  { decoded := codecs(Precision.UINT32).decode(lane.value.resize(32)) }
+          is(Precision.INT64)   { decoded := codecs(Precision.INT64).decode(lane.value.resize(64)) }
+          is(Precision.UINT64)  { decoded := codecs(Precision.UINT64).decode(lane.value.resize(64)) }
+        }
+        decoded
       })
     }
 
     def encode(components: Vec[SIMDComponents], roundMode: RoundMode.E): SIMDVector = {
       val result = SIMDVector()
       for (i <- 0 until 16) {
-        val codec = codecs(components(i).precision)
-        result.lanes(i) := codec.encode(components(i), roundMode)
+        switch(components(i).precision) {
+          is(Precision.FP8E4M3) { result.lanes(i) := codecs(Precision.FP8E4M3).encode(components(i), roundMode) }
+          is(Precision.FP8E5M2) { result.lanes(i) := codecs(Precision.FP8E5M2).encode(components(i), roundMode) }
+          is(Precision.FP16)    { result.lanes(i) := codecs(Precision.FP16).encode(components(i), roundMode) }
+          is(Precision.BF16)    { result.lanes(i) := codecs(Precision.BF16).encode(components(i), roundMode) }
+          is(Precision.TF32)    { result.lanes(i) := codecs(Precision.TF32).encode(components(i), roundMode) }
+          is(Precision.FP32)    { result.lanes(i) := codecs(Precision.FP32).encode(components(i), roundMode) }
+          is(Precision.FP64)    { result.lanes(i) := codecs(Precision.FP64).encode(components(i), roundMode) }
+          is(Precision.INT8)    { result.lanes(i) := codecs(Precision.INT8).encode(components(i), roundMode) }
+          is(Precision.UINT8)   { result.lanes(i) := codecs(Precision.UINT8).encode(components(i), roundMode) }
+          is(Precision.INT16)   { result.lanes(i) := codecs(Precision.INT16).encode(components(i), roundMode) }
+          is(Precision.UINT16)  { result.lanes(i) := codecs(Precision.UINT16).encode(components(i), roundMode) }
+          is(Precision.INT32)   { result.lanes(i) := codecs(Precision.INT32).encode(components(i), roundMode) }
+          is(Precision.UINT32)  { result.lanes(i) := codecs(Precision.UINT32).encode(components(i), roundMode) }
+          is(Precision.INT64)   { result.lanes(i) := codecs(Precision.INT64).encode(components(i), roundMode) }
+          is(Precision.UINT64)  { result.lanes(i) := codecs(Precision.UINT64).encode(components(i), roundMode) }
+        }
       }
       result
     }
@@ -183,7 +215,7 @@ object FpuTypes {
     val inexact, underflow, overflow, divByZero, subNormal, invalid, intDivByZero = Bool()
   }
 
-  // Test vectors component (Updated with negative NaNs)
+  // Test vectors component
   case class FpuTestVectors() extends Component {
     val io = new Bundle {
       val clk = in(Bool())
