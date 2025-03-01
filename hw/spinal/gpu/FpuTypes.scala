@@ -20,9 +20,11 @@ object FpuTypes {
   def RegIdx() = UInt(6 bits)
 
   // Data structure for a single SIMD lane
-  case class SIMDData() extends Bundle {
+  case class SIMDData() extends Bundle with IMasterSlave {
     val precision = Precision()
     val value = Bits(64 bits)
+	
+	override def asMaster(): Unit = {}
   }
 
   // Decoded components for SIMD data
@@ -186,6 +188,7 @@ object FpuTypes {
     val io = new Bundle {
       val clk = in(Bool())
       val rst = in(Bool())
+      val inputVector = slave(Vec(SIMDData(), 16)) // Corrected input port
     }
     val cd = ClockDomain(io.clk, io.rst)
     val vectors = new Area {
@@ -198,8 +201,10 @@ object FpuTypes {
       val fp32_neg_signaling_nan = B"32'hff800001" // FP32 -signaling NaN
     }
 
-    val inputVector = SIMDVector()
     val decodedReg = Reg(Vec(SIMDComponents(), 16))
-    decodedReg := RegNext(inputVector.decode())
+    decodedReg := RegNext(io.inputVector.decode())
+    val decodedOut = out Vec(SIMDComponents(), 16) // Direct decode output
+    decodedOut := io.inputVector.decode()
   }
+	
 }
