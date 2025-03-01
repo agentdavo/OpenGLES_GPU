@@ -85,7 +85,7 @@ object FpuTypes {
           comp.state := FormatState.NAN
         } elsewhen(expAllOnes) {
           comp.state := FormatState.INFINITY
-        } elsewhen(bits === 0) {
+        } elsewhen(exp === 0 && mant === 0) { // Fixed ZERO condition
           comp.state := FormatState.ZERO
         } otherwise {
           comp.state := FormatState.NORMAL
@@ -94,7 +94,7 @@ object FpuTypes {
         comp.sign := data.msb
         comp.exponent := 0
         comp.mantissa := 0
-        comp.intValue := data.asSInt.resize(64) // Sign-extend to 64 bits
+        comp.intValue := data.asSInt.resize(64)
         comp.state := FormatState.NORMAL
       }
       comp

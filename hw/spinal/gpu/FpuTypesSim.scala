@@ -20,7 +20,7 @@ object FpuTypesSim extends App {
     dut.io.rst #= true
     dut.cd.waitSampling(2)
     dut.io.rst #= false
-    dut.cd.waitSampling(1) // Post-reset stabilization
+    dut.cd.waitSampling(2) // Extended wait for reset stabilization
 
     // Test vectors for each precision type
     val testVectors = Map(
@@ -125,7 +125,7 @@ object FpuTypesSim extends App {
       }
     }
 
-    dut.cd.waitSampling(2) // Allow RegNext + stability
+    dut.cd.waitSampling(3) // Extended to ensure RegNext propagation
 
     // Helper to map state bits to string (binary sequential: ZERO=00, INFINITY=01, NAN=10, NORMAL=11)
     def getStateString(state: FpuTypes.FormatState.C): String = {
