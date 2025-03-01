@@ -6,7 +6,7 @@ import spinal.core.sim._
 object FpuTypesSim extends App {
   SimConfig.withWave.compile {
     val dut = new FpuTypes.FpuTestVectors
-    for (lane <- dut.io.inputVector) {
+    for (lane <- dut.io.inputVector.lanes) {
       lane.precision.simPublic()
       lane.value.simPublic()
     }
@@ -118,8 +118,8 @@ object FpuTypesSim extends App {
     testVectors.foreach { case (precision, values) =>
       values.foreach { value =>
         if (laneIdx < 16) {
-          dut.io.inputVector(laneIdx).precision #= precision
-          dut.io.inputVector(laneIdx).value #= value
+          dut.io.inputVector.lanes(laneIdx).precision #= precision
+          dut.io.inputVector.lanes(laneIdx).value #= value
           laneIdx += 1
         }
       }
@@ -140,7 +140,7 @@ object FpuTypesSim extends App {
 
     println("Input Vector (Verification):")
     for (i <- 0 until 16) {
-      val lane = dut.io.inputVector(i)
+      val lane = dut.io.inputVector.lanes(i)
       println(s"Lane $i: precision=${lane.precision.toEnum}, value=${lane.value.toBigInt.toString(16)}")
     }
 

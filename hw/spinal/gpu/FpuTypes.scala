@@ -20,11 +20,9 @@ object FpuTypes {
   def RegIdx() = UInt(6 bits)
 
   // Data structure for a single SIMD lane
-  case class SIMDData() extends Bundle with IMasterSlave {
+  case class SIMDData() extends Bundle {
     val precision = Precision()
     val value = Bits(64 bits)
-	
-	override def asMaster(): Unit = {}
   }
 
   // Decoded components for SIMD data
@@ -58,20 +56,20 @@ object FpuTypes {
 
   // Codec trait for encoding/decoding
   trait SIMDCodec {
-    def decode(data: SIMDData): SIMDComponents
-    def encode(components: SIMDComponents, roundMode: RoundMode.E): SIMDData
+    def decode(bits: Bits): SIMDComponents
+    def encode(comp: SIMDComponents, roundMode: RoundMode.E): SIMDData
   }
 
   // Precision-specific codec
   case class PrecisionCodec(precision: Precision.E, signWidth: Int, expWidth: Int, mantWidth: Int, bias: Int, isFloat: Boolean) extends SIMDCodec {
-    def decode(data: SIMDData): SIMDComponents = {
+    def decode(data: Bits): SIMDComponents = {
       val comp = SIMDComponents()
       comp.precision := precision
       comp.isInteger := Bool(!isFloat)
 
       if (isFloat) {
         val totalWidth = signWidth + expWidth + mantWidth
-        val bits = data.value.takeLow(totalWidth)
+        val bits = data.takeLow(totalWidth)
         val sign = bits(totalWidth - 1)
         val exp = bits(totalWidth - 2 downto mantWidth)
         val mant = bits(mantWidth - 1 downto 0)
@@ -93,10 +91,10 @@ object FpuTypes {
           comp.state := FormatState.NORMAL
         }
       } else {
-        comp.sign := data.value.msb
+        comp.sign := data.msb
         comp.exponent := 0
         comp.mantissa := 0
-        comp.intValue := data.value.asSInt
+        comp.intValue := data.asSInt
         comp.state := FormatState.NORMAL
       }
       comp
@@ -124,21 +122,21 @@ object FpuTypes {
 
   // Codec definitions
   val codecs = Map(
-    Precision.FP8E4M3 -> PrecisionCodec(Precision.FP8E4M3, 1, 4, 3, 7, true),
-    Precision.FP8E5M2 -> PrecisionCodec(Precision.FP8E5M2, 1, 5, 2, 15, true),
-    Precision.FP16    -> PrecisionCodec(Precision.FP16, 1, 5, 10, 15, true),
-    Precision.BF16    -> PrecisionCodec(Precision.BF16, 1, 8, 7, 127, true),
-    Precision.TF32    -> PrecisionCodec(Precision.TF32, 1, 8, 23, 127, true),
-    Precision.FP32    -> PrecisionCodec(Precision.FP32, 1, 8, 23, 127, true),
-    Precision.FP64    -> PrecisionCodec(Precision.FP64, 1, 11, 52, 1023, true),
-    Precision.INT8    -> PrecisionCodec(Precision.INT8, 0, 0, 8, 0, false),
-    Precision.UINT8   -> PrecisionCodec(Precision.UINT8, 0, 0, 8, 0, false),
-    Precision.INT16   -> PrecisionCodec(Precision.INT16, 0, 0, 16, 0, false),
-    Precision.UINT16  -> PrecisionCodec(Precision.UINT16, 0, 0, 16, 0, false),
-    Precision.INT32   -> PrecisionCodec(Precision.INT32, 0, 0, 32, 0, false),
-    Precision.UINT32  -> PrecisionCodec(Precision.UINT32, 0, 0, 32, 0, false),
-    Precision.INT64   -> PrecisionCodec(Precision.INT64, 0, 0, 64, 0, false),
-    Precision.UINT64  -> PrecisionCodec(Precision.UINT64, 0, 0, 64, 0, false)
+    Precision.FP8E4M3 -> PrecisionCodec(Precision.FP8E4M3, 1, 4,  3,  7,  true),
+    Precision.FP8E5M2 -> PrecisionCodec(Precision.FP8E5M2, 1, 5,  2, 15,  true),
+    Precision.FP16    -> PrecisionCodec(Precision.FP16,    1, 5,  10, 15,  true),
+    Precision.BF16    -> PrecisionCodec(Precision.BF16,    1, 8,  7,  127, true),
+    Precision.TF32    -> PrecisionCodec(Precision.TF32,    1, 8,  10, 127, true),
+    Precision.FP32    -> PrecisionCodec(Precision.FP32,    1, 8,  23, 127, true),
+    Precision.FP64    -> PrecisionCodec(Precision.FP64,    1, 11, 52, 1023, true),
+    Precision.INT8    -> PrecisionCodec(Precision.INT8,    1, 0,  7,  0,   false),
+    Precision.UINT8   -> PrecisionCodec(Precision.UINT8,   0, 0,  8,  0,   false),
+    Precision.INT16   -> PrecisionCodec(Precision.INT16,   1, 0,  15, 0,   false),
+    Precision.UINT16  -> PrecisionCodec(Precision.UINT16,  0, 0,  16, 0,   false),
+    Precision.INT32   -> PrecisionCodec(Precision.INT32,   1, 0,  31, 0,   false),
+    Precision.UINT32  -> PrecisionCodec(Precision.UINT32,  0, 0,  32, 0,   false),
+    Precision.INT64   -> PrecisionCodec(Precision.INT64,   1, 0,  63, 0,   false),
+    Precision.UINT64  -> PrecisionCodec(Precision.UINT64,  0, 0,  64, 0,   false)
   )
 
   // SIMD vector with 16 lanes
@@ -147,14 +145,16 @@ object FpuTypes {
 
     def decode(): Vec[SIMDComponents] = {
       Vec(lanes.map { lane =>
-        codecs(Precision.FP32).decode(lane) // Hardcode FP32 for simplicity
+        val codec = codecs(lane.precision)
+        codec.decode(lane.value.resize(codec.signWidth + codec.expWidth + codec.mantWidth))
       })
     }
 
     def encode(components: Vec[SIMDComponents], roundMode: RoundMode.E): SIMDVector = {
       val result = SIMDVector()
       for (i <- 0 until 16) {
-        result.lanes(i) := codecs(Precision.FP32).encode(components(i), roundMode) // Hardcode FP32
+        val codec = codecs(components(i).precision)
+        result.lanes(i) := codec.encode(components(i), roundMode)
       }
       result
     }
@@ -188,7 +188,7 @@ object FpuTypes {
     val io = new Bundle {
       val clk = in(Bool())
       val rst = in(Bool())
-      val inputVector = slave(Vec(SIMDData(), 16)) // Corrected input port
+      val inputVector = in(SIMDVector())
     }
     val cd = ClockDomain(io.clk, io.rst)
     val vectors = new Area {
@@ -203,8 +203,7 @@ object FpuTypes {
 
     val decodedReg = Reg(Vec(SIMDComponents(), 16))
     decodedReg := RegNext(io.inputVector.decode())
-    val decodedOut = out Vec(SIMDComponents(), 16) // Direct decode output
+    val decodedOut = out Vec(SIMDComponents(), 16)
     decodedOut := io.inputVector.decode()
   }
-	
 }
