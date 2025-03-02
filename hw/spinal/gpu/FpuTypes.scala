@@ -74,19 +74,22 @@ object FpuTypes {
         val exp = bits(totalWidth - 2 downto mantWidth)
         val mant = bits(mantWidth - 1 downto 0)
         val expAllOnes = exp === ((1 << expWidth) - 1)
-        val mantNonZero = mant =/= 0
+        val mantAllZeros = mant === 0
+        val expAllZeros = exp === 0
 
         comp.sign := sign
         comp.exponent := exp.resize(11)
         comp.mantissa := mant.resize(52)
         comp.intValue := 0
 
-        when(expAllOnes && mantNonZero) {
+        when(expAllOnes && !mantAllZeros) {
           comp.state := FormatState.NAN
-        } elsewhen(expAllOnes) {
+        } elsewhen(expAllOnes && mantAllZeros) {
           comp.state := FormatState.INFINITY
-        } elsewhen(exp === 0 && mant === 0) { // Fixed ZERO condition
+        } elsewhen(expAllZeros && mantAllZeros) {
           comp.state := FormatState.ZERO
+        } elsewhen(expAllZeros && !mantAllZeros) {
+          comp.state := FormatState.NORMAL // Subnormal
         } otherwise {
           comp.state := FormatState.NORMAL
         }
@@ -233,7 +236,7 @@ object FpuTypes {
       val fp32_neg_signaling_nan = B"32'hff800001" // FP32 -signaling NaN
     }
 
-    val decodedReg = Reg(Vec(SIMDComponents(), 16))
+    val decodedReg = Reg(Vec(SIMDComponents(), 16)) init(SIMDComponents().getZero)
     decodedReg := RegNext(io.inputVector.decode())
     val decodedOut = out Vec(SIMDComponents(), 16)
     decodedOut := io.inputVector.decode()
